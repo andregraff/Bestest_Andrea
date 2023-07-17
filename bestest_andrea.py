@@ -294,12 +294,17 @@ def main():
     
     #create a df of all the THout for each case
     all_results_HC = pd.DataFrame()
+    all_results_HC_peak = pd.DataFrame()
     
     for path_case in all_THout:
         
         line_results = create_df_HC(path_case)
         all_results_HC = pd.concat([all_results_HC, line_results], axis=0)
     
+    for path_case in all_THout:
+        
+        line_results = create_df_HC(path_case)
+        all_results_HC_peak = pd.concat([all_results_HC_peak, line_results], axis=0)
     
     
     # # # # # # # # # # # # # #
@@ -327,7 +332,7 @@ def main():
     #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
     archive_heating_with_citysim.rename(columns = {'AH':'CitySim'}, inplace=True)
     
-    
+       
     'Cooling dataframe'
     
     #read data frame of heating
@@ -339,7 +344,7 @@ def main():
     AC_column = AC_column.rename_axis('CASE')
     
     #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the archive_heating
+    #in this way you can add the column of citysim with the index of the archive_cooling
     archive_cooling.index=archive_cooling.index.astype(str)
     
     #add the retrieved column to the bestest archive
@@ -348,27 +353,80 @@ def main():
     #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
     archive_cooling_with_citysim.rename(columns = {'AC':'CitySim'}, inplace=True)
   
+    
+  
+    
+    'Annual peak heating dataframe'
+    
+    #read data frame of heating
+    archive_peak_heating = pd.read_csv ('peak_heating_loads_archive.csv', index_col = 'CASE')
+    
+    #retrieve only the column AH in  all_results_HC
+    AHP_column = retrieve_specific_column(all_results_HC_peak, 'APH')
+    #change the name of the index to 'CASE'
+    AHP_column = AHP_column.rename_axis('CASE')
+    
+    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
+    #in this way you can add the column of citysim with the index of the archive_peak_heating
+    archive_peak_heating.index=archive_peak_heating.index.astype(str)
+    
+    #add the retrieved column to the bestest archive
+    archive_peak_heating_with_citysim = archive_peak_heating.join(AHP_column, how = 'left')
+    
+    #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
+    archive_peak_heating_with_citysim.rename(columns = {'APH':'CitySim'}, inplace=True)
+    
         
+    'Annual peak cooling dataframe'
+        
+    #read data frame of heating
+    archive_peak_cooling = pd.read_csv ('peak_cooling_loads_archive.csv', index_col = 'CASE')
+    
+    #retrieve only the column AC in  all_results_HC_peak
+    ACP_column = retrieve_specific_column(all_results_HC_peak, 'APC')
+    #change the name of the index to 'CASE'
+    ACP_column = ACP_column.rename_axis('CASE')
+    
+    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
+    #in this way you can add the column of citysim with the index of the archive_peak_cooling
+    archive_peak_cooling.index=archive_peak_cooling.index.astype(str)
+    
+    #add the retrieved column to the bestest archive
+    archive_peak_cooling_with_citysim = archive_peak_cooling.join(ACP_column, how = 'left')
+    
+    #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
+    archive_peak_cooling_with_citysim.rename(columns = {'APC':'CitySim'}, inplace=True)
+    
+   
+    
+   
+    
    
     'calculate min and MAX and the distance % from the boundaries'    
     
     #calculates the maximum value across rows and assigns it to a new column named 'MAX'
-    
     archive_heating_with_citysim = calculculate_distance(archive_heating_with_citysim, col_reference ='CitySim')
-    
     archive_cooling_with_citysim = calculculate_distance(archive_cooling_with_citysim, col_reference ='CitySim')
+    
+    archive_peak_heating_with_citysim = calculculate_distance(archive_peak_heating_with_citysim, col_reference ='CitySim')
+    archive_peak_cooling_with_citysim = calculculate_distance(archive_peak_cooling_with_citysim, col_reference ='CitySim')
+    
+    
     
     #round all the values
     archive_heating_with_citysim = round(archive_heating_with_citysim, 3)
     archive_cooling_with_citysim = round(archive_cooling_with_citysim, 3)
+    
+    archive_peak_heating_with_citysim = round(archive_peak_heating_with_citysim, 3)
+    archive_peak_cooling_with_citysim = round(archive_peak_cooling_with_citysim, 3)
 
 
-    return archive_heating_with_citysim, archive_cooling_with_citysim
+    return archive_heating_with_citysim, archive_cooling_with_citysim, archive_peak_heating_with_citysim, archive_peak_cooling_with_citysim
  
 
 
 
    
 if __name__ == "__main__":
-    archive_heating_with_citysim, archive_cooling_with_citysim = main()
+    archive_heating_with_citysim, archive_cooling_with_citysim, archive_peak_heating_with_citysim, archive_peak_cooling_with_citysim = main()
     

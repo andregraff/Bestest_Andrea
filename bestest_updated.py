@@ -8,8 +8,7 @@ import os
 import pandas as pd
 import fnmatch
 import subprocess
-import csv
-import numpy as np
+import argparse
 
 
 ###############################################################################
@@ -164,11 +163,12 @@ def integration_with_date_and_hour(h_y):
 
 def calculculate_distance(df, col_reference = '', axis=1):
     
-    #calculates the maximum value across rows and assigns it to a new column named 'MAX'
-    df['MAX'] = df.max(axis, numeric_only=True)
-        
     #calculates the minumum value across rows and assigns it to a new column named 'min'
     df['min'] = df.min(axis, numeric_only=True)
+    
+    #calculates the maximum value across rows and assigns it to a new column named 'MAX'
+    df['MAX'] = df.max(axis, numeric_only=True)
+    
     
     #convert the column col_reference from type object to float64
     df[col_reference] = pd.to_numeric(df[col_reference], errors='coerce')
@@ -192,18 +192,13 @@ def calculculate_distance(df, col_reference = '', axis=1):
             df.at[index, 'distance_%'] = 0
     
     #round the values of the column to n decimal places
-    df['distance_%'] = round(df['distance_%'], 2)
+    df['distance_%'] = round(df['distance_%'], 0)
      
 
     return df
     
 
 
-
-
-
-
-'DataFrame creators'
 
 ###############################################################################
 ###                              create_df_HC                               ###
@@ -245,9 +240,83 @@ def create_df_HC(path_case):
 
     return line_results
 
+###############################################################################
+###                              color_bestest                              ###
+###############################################################################
 
-
-
+def color_bestest(df, col_reference, out_name= '', *columns):
+    
+    #get the number position of the columns' names
+    col_nbs = [df.columns.get_loc(col) for col in columns] #columns numbers
+    ref_nb = df.columns.get_loc(col_reference) # reference number
+      
+    # Create a Pandas Excel writer using XlsxWriter as the engine.
+    writer = pd.ExcelWriter(f'{out_name}.xlsx', engine='xlsxwriter')
+      
+    # Convert the dataframe to an XlsxWriter Excel object.
+    df.to_excel(writer, sheet_name='general')
+      
+    # Get the xlsxwriter workbook and worksheet objects.
+    workbook  = writer.book
+    worksheet = writer.sheets['general']
+          
+    # Add a format. Light red fill with dark red text.
+    red_format = workbook.add_format({'bg_color': '#FFC7CE',
+                                      'font_color': '#9C0006'})
+          
+    # Add a format. Light blue fill with dark blue text.
+    blue_format = workbook.add_format({'bg_color': '#0096FF',
+                                      'font_color': '#00008B'})
+      
+    # Add a format. Green fill with black text for =0
+    green_format = workbook.add_format({'bg_color': '#a8e16c',
+                                        'font_color': '#000000'})
+    
+    # Add a format. Grey fill with black text for =0
+    grey_format = workbook.add_format({'bg_color': '#b7b7b7',
+                                        'font_color': '#000000'})
+            
+    for col_nb in col_nbs:
+        # Calculate the range to which the conditional format is applied (only for the desired columns).
+        (min_row, max_row) = (1, df.shape[0])  # Skip header.
+        (min_col, max_col) = (col_nb +1, col_nb +1)  # Only one columns.
+        
+        # Apply a conditional format to the cell range.
+        worksheet.conditional_format(min_row, min_col, max_row, max_col,
+                                       {'type':     'cell',
+                                        'criteria': '<',
+                                        'value':    0,
+                                        'format':   blue_format})
+          
+        worksheet.conditional_format(min_row, min_col, max_row, max_col,
+                                       {'type':     'cell',
+                                        'criteria': '>',
+                                        'value':    0,
+                                        'format':   red_format})
+          
+        worksheet.conditional_format(min_row, min_col, max_row, max_col,
+                                       {'type':     'cell',
+                                        'criteria': '=',
+                                        'value':    0,
+                                        'format':   green_format})
+       
+    #col_reference color
+    (min_row, max_row) = (1, df.shape[0])  # Skip header.
+    (min_col, max_col) = (ref_nb +1, ref_nb +1)  # Only one columns. 
+    
+    worksheet.conditional_format(min_row, min_col, max_row, max_col,
+                                   {'type':     'cell',
+                                    'criteria': '!=',
+                                    'value':    0,
+                                    'format':   grey_format})
+    
+    
+    # Close the Pandas Excel writer and output the Excel file.
+    writer.save()
+    
+    file_name = f'{out_name}.xlsx'
+    
+    return file_name
 
 
 
@@ -256,7 +325,7 @@ def create_df_HC(path_case):
 '                                     Main                                    '
 ###############################################################################
 
-def main():
+def main(run_citysim=False):
     
     
     current_dir = os.getcwd()
@@ -278,17 +347,19 @@ def main():
     path_XMLfiles = search_extensions(current_dir, extension_file = '.xml', create_list= True)
     
     
-    'Run CitySim'
-    '''
-    #run citysim for each file in the list
-    print("Process started")
+    'Run CitySim option'
     
-    for xmlfile in path_XMLfiles:
+    if run_citysim == True:
+        
+        #run citysim for each file in the list
+        print("Process started")
+        
+        for xmlfile in path_XMLfiles:
+        
+            for path in execute(f"{citysim_path} {xmlfile}"):
+                print(path, end="")
     
-        for path in execute(f"{citysim_path} {xmlfile}"):
-            print(path, end="")
     
-    '''
     #read all TH.out file
     all_THout = search_extensions(current_dir, extension_file = 'TH.out', create_list= True)
     
@@ -315,7 +386,7 @@ def main():
     'Heating dataframe'
     
     #read data frame of heating
-    archive_heating = pd.read_csv ('archive_annual_heating.csv', index_col = 'CASE')
+    heating = pd.read_csv ('Archives/archive_annual_heating.csv', index_col = 'CASE')
     
     #retrieve only the column AH in  all_results_HC
     AH_column = retrieve_specific_column(all_results_HC, 'AH')
@@ -323,20 +394,20 @@ def main():
     AH_column = AH_column.rename_axis('CASE')
     
     #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the archive_heating
-    archive_heating.index=archive_heating.index.astype(str)
+    #in this way you can add the column of citysim with the index of the heating
+    heating.index=heating.index.astype(str)
     
     #add the retrieved column to the bestest archive
-    archive_heating_with_citysim = archive_heating.join(AH_column, how = 'left')
+    heating_with_citysim = heating.join(AH_column, how = 'left')
     
     #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    archive_heating_with_citysim.rename(columns = {'AH':'CitySim'}, inplace=True)
+    heating_with_citysim.rename(columns = {'AH':'CitySim'}, inplace=True)
     
        
     'Cooling dataframe'
     
     #read data frame of heating
-    archive_cooling = pd.read_csv ('archive_annual_cooling.csv', index_col = 'CASE')
+    cooling = pd.read_csv ('Archives/archive_annual_cooling.csv', index_col = 'CASE')
     
     #retrieve only the column AC in  all_results_HC
     AC_column = retrieve_specific_column(all_results_HC, 'AC')
@@ -344,14 +415,14 @@ def main():
     AC_column = AC_column.rename_axis('CASE')
     
     #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the archive_cooling
-    archive_cooling.index=archive_cooling.index.astype(str)
+    #in this way you can add the column of citysim with the index of the cooling
+    cooling.index=cooling.index.astype(str)
     
     #add the retrieved column to the bestest archive
-    archive_cooling_with_citysim = archive_cooling.join(AC_column, how = 'left')
+    cooling_with_citysim = cooling.join(AC_column, how = 'left')
     
     #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    archive_cooling_with_citysim.rename(columns = {'AC':'CitySim'}, inplace=True)
+    cooling_with_citysim.rename(columns = {'AC':'CitySim'}, inplace=True)
   
     
   
@@ -359,7 +430,7 @@ def main():
     'Annual peak heating dataframe'
     
     #read data frame of heating
-    archive_peak_heating = pd.read_csv ('peak_heating_loads_archive.csv', index_col = 'CASE')
+    peak_heating = pd.read_csv ('Archives/peak_heating_loads_archive.csv', index_col = 'CASE')
     
     #retrieve only the column AH in  all_results_HC
     AHP_column = retrieve_specific_column(all_results_HC_peak, 'APH')
@@ -367,20 +438,20 @@ def main():
     AHP_column = AHP_column.rename_axis('CASE')
     
     #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the archive_peak_heating
-    archive_peak_heating.index=archive_peak_heating.index.astype(str)
+    #in this way you can add the column of citysim with the index of the peak_heating
+    peak_heating.index=peak_heating.index.astype(str)
     
     #add the retrieved column to the bestest archive
-    archive_peak_heating_with_citysim = archive_peak_heating.join(AHP_column, how = 'left')
+    peak_heating_with_citysim = peak_heating.join(AHP_column, how = 'left')
     
     #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    archive_peak_heating_with_citysim.rename(columns = {'APH':'CitySim'}, inplace=True)
+    peak_heating_with_citysim.rename(columns = {'APH':'CitySim'}, inplace=True)
     
         
     'Annual peak cooling dataframe'
         
     #read data frame of heating
-    archive_peak_cooling = pd.read_csv ('peak_cooling_loads_archive.csv', index_col = 'CASE')
+    peak_cooling = pd.read_csv ('Archives/peak_cooling_loads_archive.csv', index_col = 'CASE')
     
     #retrieve only the column AC in  all_results_HC_peak
     ACP_column = retrieve_specific_column(all_results_HC_peak, 'APC')
@@ -388,45 +459,82 @@ def main():
     ACP_column = ACP_column.rename_axis('CASE')
     
     #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the archive_peak_cooling
-    archive_peak_cooling.index=archive_peak_cooling.index.astype(str)
+    #in this way you can add the column of citysim with the index of the peak_cooling
+    peak_cooling.index=peak_cooling.index.astype(str)
     
     #add the retrieved column to the bestest archive
-    archive_peak_cooling_with_citysim = archive_peak_cooling.join(ACP_column, how = 'left')
+    peak_cooling_with_citysim = peak_cooling.join(ACP_column, how = 'left')
     
     #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    archive_peak_cooling_with_citysim.rename(columns = {'APC':'CitySim'}, inplace=True)
+    peak_cooling_with_citysim.rename(columns = {'APC':'CitySim'}, inplace=True)
     
    
-    
-   
-    
    
     'calculate min and MAX and the distance % from the boundaries'    
     
     #calculates the maximum value across rows and assigns it to a new column named 'MAX'
-    archive_heating_with_citysim = calculculate_distance(archive_heating_with_citysim, col_reference ='CitySim')
-    archive_cooling_with_citysim = calculculate_distance(archive_cooling_with_citysim, col_reference ='CitySim')
+    heating_with_citysim = calculculate_distance(heating_with_citysim, col_reference ='CitySim')
+    cooling_with_citysim = calculculate_distance(cooling_with_citysim, col_reference ='CitySim')
     
-    archive_peak_heating_with_citysim = calculculate_distance(archive_peak_heating_with_citysim, col_reference ='CitySim')
-    archive_peak_cooling_with_citysim = calculculate_distance(archive_peak_cooling_with_citysim, col_reference ='CitySim')
+    peak_heating_with_citysim = calculculate_distance(peak_heating_with_citysim, col_reference ='CitySim')
+    peak_cooling_with_citysim = calculculate_distance(peak_cooling_with_citysim, col_reference ='CitySim')
     
     
     
     #round all the values
-    archive_heating_with_citysim = round(archive_heating_with_citysim, 3)
-    archive_cooling_with_citysim = round(archive_cooling_with_citysim, 3)
+    heating_with_citysim = round(heating_with_citysim, 3)
+    cooling_with_citysim = round(cooling_with_citysim, 3)
     
-    archive_peak_heating_with_citysim = round(archive_peak_heating_with_citysim, 3)
-    archive_peak_cooling_with_citysim = round(archive_peak_cooling_with_citysim, 3)
+    peak_heating_with_citysim = round(peak_heating_with_citysim, 3)
+    peak_cooling_with_citysim = round(peak_cooling_with_citysim, 3)
+    
+    
+    'dataframes colored'
+    
+    
+    #create a folder to store the outputs
+    directory = 'xlsx_ouputs'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        print("Directory '% s' created" % directory)
+    else:
+        print("Directory '% s' already exists" % directory)
+        
+    #change the current directory
+    os.chdir(directory)
+    
+    #export a xlsx file with the color of the bestest
+    dataframe1 = color_bestest(heating_with_citysim, 'CitySim', 'heating_with_citysim', 'distance_%')
+    dataframe2 = color_bestest(cooling_with_citysim, 'CitySim', 'cooling_with_citysim', 'distance_%')
+    dataframe3 = color_bestest(peak_heating_with_citysim, 'CitySim', 'peak_heating_with_citysim', 'distance_%')
+    dataframe4 = color_bestest(peak_cooling_with_citysim, 'CitySim', 'peak_cooling_with_citysim', 'distance_%')
+    
+    #return to the current dir
+    os.chdir(current_dir)
+    
+    
 
 
-    return archive_heating_with_citysim, archive_cooling_with_citysim, archive_peak_heating_with_citysim, archive_peak_cooling_with_citysim
+    return heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim
  
 
 
 
    
 if __name__ == "__main__":
-    archive_heating_with_citysim, archive_cooling_with_citysim, archive_peak_heating_with_citysim, archive_peak_cooling_with_citysim = main()
+    
+    #create an argument parser
+    parser = argparse.ArgumentParser()
+    
+    # Add the desired command-line arguments
+    parser.add_argument('--run_citysim', help='Turn run_citysim to True if you want to run all the xml files.', action='store_true')
+   
+    # Parse the command-line arguments
+    args = parser.parse_args()
+    
+    # Call the main function with the parsed arguments
+    main(args.run_citysim)
+    
+    heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim = main()
+
     

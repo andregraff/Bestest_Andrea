@@ -158,10 +158,10 @@ def integration_with_date_and_hour(h_y):
 
 
 ###############################################################################
-###                           calculate_distance                            ###
+###                               add_minmax                                ###
 ###############################################################################
 
-def calculculate_distance(df, col_reference = '', axis=1):
+def add_minmax(df, axis=1):
     
     #calculates the minumum value across rows and assigns it to a new column named 'min'
     df['min'] = df.min(axis, numeric_only=True)
@@ -169,7 +169,14 @@ def calculculate_distance(df, col_reference = '', axis=1):
     #calculates the maximum value across rows and assigns it to a new column named 'MAX'
     df['MAX'] = df.max(axis, numeric_only=True)
     
-    
+    return df
+
+###############################################################################
+###                           calculate_distance                            ###
+###############################################################################
+
+def calculate_distance(df, col_reference = '', axis=1):
+
     #convert the column col_reference from type object to float64
     df[col_reference] = pd.to_numeric(df[col_reference], errors='coerce')
     
@@ -197,6 +204,30 @@ def calculculate_distance(df, col_reference = '', axis=1):
 
     return df
     
+
+###############################################################################
+###                              add_reference                              ###
+###############################################################################
+
+def add_reference(col_name, ref_outputs, base_df, name_ref):
+    '''
+    Add a specific column from the reference df (ref_outputs) to another df (base_df).
+    The output is the base_df with  +1 column with the name (name_ref)
+    '''
+    
+    column = retrieve_specific_column(ref_outputs, col_name)
+    #change the name of the index to 'CASE'
+    column = column.rename_axis('CASE')
+    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
+    #in this way you can add the column of citysim with the index of the heating
+    base_df.index=base_df.index.astype(str)
+    #add the retrieved column to the bestest archive
+    base_df_with_reference = base_df.join(column, how = 'left')
+    #change the name from col_name to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
+    base_df_with_reference.rename(columns = {f'{col_name}':f'{name_ref}'}, inplace=True)
+    
+    return base_df_with_reference
+
 
 
 
@@ -332,17 +363,6 @@ def main(run_citysim=False):
     citysim_path = r"CitySimVersion\CitySim.exe"
     
     
-    BESTESTcases = [
-        '600', '610', '620', '630', '900', '910', '920', '930', '960', '195',
-        '200', '210', '230', '240', '250', '270', '290', '300', '310', '320',
-        '395', '400', '410', '420', '430', '800', '280', '440', '810', '220',
-        '215']
-
-    BESTESTresults_category = ("AH", "AC", "APH", "Month_H", "Day_H", "Hour_H", "APC", "Month_C", "Day_C", "Hour_C")
-    #create a df from the BESTEST_results_category tuple
-    
-
-    
     #create a list of all xml files
     path_XMLfiles = search_extensions(current_dir, extension_file = '.xml', create_list= True)
     
@@ -377,107 +397,53 @@ def main(run_citysim=False):
         line_results = create_df_HC(path_case)
         all_results_HC_peak = pd.concat([all_results_HC_peak, line_results], axis=0)
     
+                       
+    'Heating dataframes: annual and peak hourly'
     
-    # # # # # # # # # # # # # #
-    'Bestest comparison part' 
-    # # # # # # # # # # # # # #
+    #read data frame of annual heating
+    heating = pd.read_csv ('Archives/archive_annual_heating.csv', index_col = 'CASE')    
+    #add the min and max column
+    heating = add_minmax(heating)
     
-                    
-    'Heating dataframe'
-    
-    #read data frame of heating
-    heating = pd.read_csv ('Archives/archive_annual_heating.csv', index_col = 'CASE')
-    
-    #retrieve only the column AH in  all_results_HC
-    AH_column = retrieve_specific_column(all_results_HC, 'AH')
-    #change the name of the index to 'CASE'
-    AH_column = AH_column.rename_axis('CASE')
-    
-    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the heating
-    heating.index=heating.index.astype(str)
-    
-    #add the retrieved column to the bestest archive
-    heating_with_citysim = heating.join(AH_column, how = 'left')
-    
-    #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    heating_with_citysim.rename(columns = {'AH':'CitySim'}, inplace=True)
-    
-       
-    'Cooling dataframe'
-    
-    #read data frame of heating
-    cooling = pd.read_csv ('Archives/archive_annual_cooling.csv', index_col = 'CASE')
-    
-    #retrieve only the column AC in  all_results_HC
-    AC_column = retrieve_specific_column(all_results_HC, 'AC')
-    #change the name of the index to 'CASE'
-    AC_column = AC_column.rename_axis('CASE')
-    
-    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the cooling
-    cooling.index=cooling.index.astype(str)
-    
-    #add the retrieved column to the bestest archive
-    cooling_with_citysim = cooling.join(AC_column, how = 'left')
-    
-    #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    cooling_with_citysim.rename(columns = {'AC':'CitySim'}, inplace=True)
-  
-    
-  
-    
-    'Annual peak heating dataframe'
-    
-    #read data frame of heating
+    #read data frame of hourly peak heating
     peak_heating = pd.read_csv ('Archives/peak_heating_loads_archive.csv', index_col = 'CASE')
+    #add min and max column
+    peak_heating = add_minmax(peak_heating)
     
-    #retrieve only the column AH in  all_results_HC
-    AHP_column = retrieve_specific_column(all_results_HC_peak, 'APH')
-    #change the name of the index to 'CASE'
-    AHP_column = AHP_column.rename_axis('CASE')
     
-    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the peak_heating
-    peak_heating.index=peak_heating.index.astype(str)
+    'Cooling dataframes: annual and peak hourly'
+ 
+    #read data frame of cooling
+    cooling = pd.read_csv ('Archives/archive_annual_cooling.csv', index_col = 'CASE')
+    # add min and max column
+    cooling = add_minmax(cooling)
     
-    #add the retrieved column to the bestest archive
-    peak_heating_with_citysim = peak_heating.join(AHP_column, how = 'left')
-    
-    #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    peak_heating_with_citysim.rename(columns = {'APH':'CitySim'}, inplace=True)
-    
-        
-    'Annual peak cooling dataframe'
-        
-    #read data frame of heating
+    #read data frame of hourly peak cooling
     peak_cooling = pd.read_csv ('Archives/peak_cooling_loads_archive.csv', index_col = 'CASE')
+    # add min and max
+    peak_cooling = add_minmax(peak_cooling)
+
     
-    #retrieve only the column AC in  all_results_HC_peak
-    ACP_column = retrieve_specific_column(all_results_HC_peak, 'APC')
-    #change the name of the index to 'CASE'
-    ACP_column = ACP_column.rename_axis('CASE')
+
+ 
+
+    'add citysim reference to the dataframes'
     
-    #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
-    #in this way you can add the column of citysim with the index of the peak_cooling
-    peak_cooling.index=peak_cooling.index.astype(str)
+    heating_with_citysim = add_reference('AH', all_results_HC, heating, 'CitySim_May')
+    peak_heating_with_citysim = add_reference('APC', all_results_HC_peak, peak_heating, 'CitySim_May')
     
-    #add the retrieved column to the bestest archive
-    peak_cooling_with_citysim = peak_cooling.join(ACP_column, how = 'left')
+    cooling_with_citysim = add_reference('AC', all_results_HC, cooling, 'CitySim_May')
+    peak_cooling_with_citysim = add_reference('APC', all_results_HC_peak, peak_cooling, 'CitySim_May')
+
     
-    #change the name from AH to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    peak_cooling_with_citysim.rename(columns = {'APC':'CitySim'}, inplace=True)
+    'calculate the distance % from the boundaries (min and MAX)'    
+
+    #calculate the distance
+    heating_with_citysim = calculate_distance(heating_with_citysim, col_reference ='CitySim_May')
+    cooling_with_citysim = calculate_distance(cooling_with_citysim, col_reference ='CitySim_May')
     
-   
-   
-    'calculate min and MAX and the distance % from the boundaries'    
-    
-    #calculates the maximum value across rows and assigns it to a new column named 'MAX'
-    heating_with_citysim = calculculate_distance(heating_with_citysim, col_reference ='CitySim')
-    cooling_with_citysim = calculculate_distance(cooling_with_citysim, col_reference ='CitySim')
-    
-    peak_heating_with_citysim = calculculate_distance(peak_heating_with_citysim, col_reference ='CitySim')
-    peak_cooling_with_citysim = calculculate_distance(peak_cooling_with_citysim, col_reference ='CitySim')
+    peak_heating_with_citysim = calculate_distance(peak_heating_with_citysim, col_reference ='CitySim_May')
+    peak_cooling_with_citysim = calculate_distance(peak_cooling_with_citysim, col_reference ='CitySim_May')
     
     
     
@@ -487,33 +453,21 @@ def main(run_citysim=False):
     
     peak_heating_with_citysim = round(peak_heating_with_citysim, 3)
     peak_cooling_with_citysim = round(peak_cooling_with_citysim, 3)
-    
+     
     
     'dataframes colored'
     
-    
     #create a folder to store the outputs
-    directory = 'xlsx_ouputs'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-        print("Directory '% s' created" % directory)
+    dir_xlsx = 'xlsx_ouputs'
+    if not os.path.exists(dir_xlsx):
+        os.makedirs(dir_xlsx)
+        print("Directory '% s' created" % dir_xlsx)
     else:
-        print("Directory '% s' already exists" % directory)
-        
-    #change the current directory
-    os.chdir(directory)
-    
-    #export a xlsx file with the color of the bestest
-    dataframe1 = color_bestest(heating_with_citysim, 'CitySim', 'heating_with_citysim', 'distance_%')
-    dataframe2 = color_bestest(cooling_with_citysim, 'CitySim', 'cooling_with_citysim', 'distance_%')
-    dataframe3 = color_bestest(peak_heating_with_citysim, 'CitySim', 'peak_heating_with_citysim', 'distance_%')
-    dataframe4 = color_bestest(peak_cooling_with_citysim, 'CitySim', 'peak_cooling_with_citysim', 'distance_%')
-    
-    #return to the current dir
-    os.chdir(current_dir)
-    
+        print("Directory '% s' already exists" % dir_xlsx)
     
 
+    #return to the current dir
+    os.chdir(current_dir)
 
     return heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim
  

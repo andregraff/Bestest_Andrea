@@ -35,7 +35,7 @@ def search_extensions(current_dir, extension_file, create_list=None):
       A list of retrieved file paths.
   """
     #Initialize a list of valid extensions
-    valid_extensions = ['.html', '.csv', '.idf', '.eso', '.xml', 'TH.out']
+    valid_extensions = ['.html', '.csv', '.idf', '.eso', '.xml', 'TH.out', '.xlsx']
 
    
     #this is a while loop to ensure it matches one of the valid extensions
@@ -100,7 +100,7 @@ def execute(cmd):
 ###                      retrieve_specific_column                           ###
 ###############################################################################
 
-def retrieve_specific_column(df, col_name):
+def retrieve_specific_column(df, col_name: str):
     'select colums that coutain a specific name'
     
     name_list = []  # name list of all the columns names that countain the specified name
@@ -209,24 +209,24 @@ def calculate_distance(df, col_reference = '', axis=1):
 ###                              add_reference                              ###
 ###############################################################################
 
-def add_reference(col_name, ref_outputs, base_df, name_ref):
+def add_reference(col_in: str, df_in, df_out, col_out: str):
     '''
-    Add a specific column from the reference df (ref_outputs) to another df (base_df).
-    The output is the base_df with  +1 column with the name (name_ref)
+    Add a specific column from the reference df (df_in) to another df (df_out).
+    The output is the df_out with  +1 column with the name (col_out)
     '''
     
-    column = retrieve_specific_column(ref_outputs, col_name)
+    column = retrieve_specific_column(df_in, col_in)
     #change the name of the index to 'CASE'
     column = column.rename_axis('CASE')
     #change the index type from <class 'pandas.core.indexes.numeric.Int64Index'> to <class 'pandas.core.indexes.base.Index'>
     #in this way you can add the column of citysim with the index of the heating
-    base_df.index=base_df.index.astype(str)
+    df_out.index=df_out.index.astype(str)
     #add the retrieved column to the bestest archive
-    base_df_with_reference = base_df.join(column, how = 'left')
-    #change the name from col_name to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
-    base_df_with_reference.rename(columns = {f'{col_name}':f'{name_ref}'}, inplace=True)
+    df_out_with_reference = df_out.join(column, how = 'left')
+    #change the name from col_in to CitySim. With inplace=True it modifies the existing DataFrame itself instead of creating a new one
+    df_out_with_reference.rename(columns = {f'{col_in}':f'{col_out}'}, inplace=True)
     
-    return base_df_with_reference
+    return df_out_with_reference
 
 
 
@@ -465,17 +465,48 @@ def main(run_citysim=False, new_ref=True):
     else:
         print("Directory '% s' already exists" % dir_xlsx)
 
-
     #change the current directory
     os.chdir(dir_xlsx)
+
     
-    #if there's a new version of citysim, then:
+    '''
+    If new_ref = True then add the new values found in the simulation into the
+    old excels files. It add 2 new column with citysim and distance.
+    Use new_ref=True if you want to add new values with a new CitySim version
+    and make a comparison.
+    '''
     if new_ref == True:
         
-        new_heat = pd.read_excel('heating_with_citysim.xlsx', index_col='CASE')
-        new_heat = add_reference('CitySim', heating_with_citysim, new_heat, 'new_CitySim')
-        new_heat = calculate_distance(new_heat, 'new_CitySim')
-        color_bestest(new_heat, 'new_CitySim','heating_with_citysim', 'distance_%') 
+        #create a dictionary with the output dataframes
+        df_dict = {
+            "heating_with_citysim.xlsx": heating_with_citysim,
+            "cooling_with_citysim.xlsx": cooling_with_citysim,
+            "peak_heating_with_citysim.xlsx": peak_heating_with_citysim,
+            "peak_cooling_with_citysim.xlsx": peak_cooling_with_citysim,
+            }
+        #find all the xlsx files in the directory
+        excel_paths = search_extensions(os.getcwd(), extension_file='.xlsx') #is a list
+        #extract only the 'names.xlsx'
+        excel_names = [os.path.basename(file_path) for file_path in excel_paths]
+        
+        #for each file (string) in the list:
+        for file in excel_names:
+            #read the excel file adn convert it into a df
+            new_df = pd.read_excel(file, index_col='CASE')
+            
+            #check if there's already the new value
+            if 'new_CitySim' in new_df.columns:
+                print(f'new_CitySim column already in the {file}')
+            #if not then:
+            else:
+                #rename column to avoid conflicts
+                new_df.rename(columns={"CitySim": "old_CitySim", "distance_%":"old_distance_%"}, inplace=True)
+                #df_dict.get will get the right value name. With the dict you can
+                #do the for loop in automatic
+                new_df = add_reference('CitySim', df_dict.get(f'{file}'), new_df, 'new_CitySim')
+                new_df = calculate_distance(new_df, 'new_CitySim')
+                #overwrite the xlsx files with the 2 new columns
+                color_bestest(new_df, 'new_CitySim',f'{file}'.strip('.xlsx'), 'distance_%') 
 
     else:
         #export a xlsx file with the color of the bestest

@@ -49,11 +49,9 @@ def search_extensions(current_dir, extension_file, create_list=None):
     for root, dirs, files in os.walk(current_dir):
         
         #use fnmatch to filter the lists of files in each directory
-        for filename in fnmatch.filter(files, f'*{extension_file}'):
-            
+        for filename in fnmatch.filter(files, f'*{extension_file}'):           
             #construct the full path using .join
-            file_path = os.path.join(root, filename)
-            
+            file_path = os.path.join(root, filename)          
             #Append object to the end of the list
             files_found.append(file_path)
     
@@ -199,7 +197,7 @@ def calculate_distance(df, col_reference = '', axis=1):
             df.at[index, 'distance_%'] = 0
     
     #round the values of the column to n decimal places
-    df['distance_%'] = round(df['distance_%'], 0)
+    df['distance_%'] = round(df['distance_%'], 1)
      
 
     return df
@@ -274,7 +272,7 @@ def create_df_HC(path_case):
 ###############################################################################
 ###                              color_bestest                              ###
 ###############################################################################
-
+                                
 def color_bestest(df, col_reference, out_name= '', *columns):
     
     #get the number position of the columns' names
@@ -348,7 +346,7 @@ def color_bestest(df, col_reference, out_name= '', *columns):
     file_name = f'{out_name}.xlsx'
     
     return file_name
-
+    
 
 
 
@@ -356,7 +354,7 @@ def color_bestest(df, col_reference, out_name= '', *columns):
 '                                     Main                                    '
 ###############################################################################
 
-def main(run_citysim=False, new_ref=True):
+def main(run_citysim=False, new_ref=False, concat_outs=True):
     
     
     current_dir = os.getcwd()
@@ -364,7 +362,7 @@ def main(run_citysim=False, new_ref=True):
     
     
     #create a list of all xml files
-    path_XMLfiles = search_extensions(current_dir, extension_file = '.xml', create_list= True)
+    path_XMLfiles = search_extensions(current_dir, extension_file = '.xml')
     
     
     'Run CitySim option'
@@ -381,9 +379,11 @@ def main(run_citysim=False, new_ref=True):
     
     
     #read all TH.out file
-    all_THout = search_extensions(current_dir, extension_file = 'TH.out', create_list= True)
+    all_THout = search_extensions(current_dir, extension_file = 'TH.out')
     
-    #create a df of all the THout for each case
+    
+    'create a df of all the THout for each case'
+    
     all_results_HC = pd.DataFrame()
     all_results_HC_peak = pd.DataFrame()
     
@@ -398,7 +398,7 @@ def main(run_citysim=False, new_ref=True):
         all_results_HC_peak = pd.concat([all_results_HC_peak, line_results], axis=0)
     
                        
-    'Heating dataframes: annual and peak hourly'
+    'Heating dataframes: annual / peak hourly'
     
     #read data frame of annual heating
     heating = pd.read_csv ('Archives/archive_annual_heating.csv', index_col = 'CASE')    
@@ -411,7 +411,7 @@ def main(run_citysim=False, new_ref=True):
     peak_heating = add_minmax(peak_heating)
     
     
-    'Cooling dataframes: annual and peak hourly'
+    'Cooling dataframes: annual / peak hourly'
  
     #read data frame of cooling
     cooling = pd.read_csv ('Archives/archive_annual_cooling.csv', index_col = 'CASE')
@@ -516,11 +516,16 @@ def main(run_citysim=False, new_ref=True):
         color_bestest(peak_cooling_with_citysim, 'CitySim', 'peak_cooling_with_citysim', 'distance_%')
     
 
+    if concat_outs:
+        
+        AH_APH = pd.concat([heating_with_citysim, peak_heating_with_citysim], axis=1)
+        AC_APC = pd.concat([cooling_with_citysim, peak_cooling_with_citysim], axis=1)
+        
 
     #return to the current dir
     os.chdir(current_dir)
 
-    return heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim
+    return heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim,AH_APH, AC_APC
  
 
 
@@ -540,6 +545,8 @@ if __name__ == "__main__":
     # Call the main function with the parsed arguments
     main(args.run_citysim)
     
-    heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim = main()
+    heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim, AH_APH, AC_APC = main()
 
-    
+
+
+

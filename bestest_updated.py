@@ -356,7 +356,7 @@ def color_bestest(df, col_reference, out_name= '', *columns):
 '                                     Main                                    '
 ###############################################################################
 
-def main(run_citysim=False):
+def main(run_citysim=False, new_ref=True):
     
     
     current_dir = os.getcwd()
@@ -429,21 +429,21 @@ def main(run_citysim=False):
 
     'add citysim reference to the dataframes'
     
-    heating_with_citysim = add_reference('AH', all_results_HC, heating, 'CitySim_May')
-    peak_heating_with_citysim = add_reference('APC', all_results_HC_peak, peak_heating, 'CitySim_May')
+    heating_with_citysim = add_reference('AH', all_results_HC, heating, 'CitySim')
+    peak_heating_with_citysim = add_reference('APH', all_results_HC_peak, peak_heating, 'CitySim')
     
-    cooling_with_citysim = add_reference('AC', all_results_HC, cooling, 'CitySim_May')
-    peak_cooling_with_citysim = add_reference('APC', all_results_HC_peak, peak_cooling, 'CitySim_May')
+    cooling_with_citysim = add_reference('AC', all_results_HC, cooling, 'CitySim')
+    peak_cooling_with_citysim = add_reference('APC', all_results_HC_peak, peak_cooling, 'CitySim')
 
     
     'calculate the distance % from the boundaries (min and MAX)'    
 
     #calculate the distance
-    heating_with_citysim = calculate_distance(heating_with_citysim, col_reference ='CitySim_May')
-    cooling_with_citysim = calculate_distance(cooling_with_citysim, col_reference ='CitySim_May')
+    heating_with_citysim = calculate_distance(heating_with_citysim, col_reference ='CitySim')
+    cooling_with_citysim = calculate_distance(cooling_with_citysim, col_reference ='CitySim')
     
-    peak_heating_with_citysim = calculate_distance(peak_heating_with_citysim, col_reference ='CitySim_May')
-    peak_cooling_with_citysim = calculate_distance(peak_cooling_with_citysim, col_reference ='CitySim_May')
+    peak_heating_with_citysim = calculate_distance(peak_heating_with_citysim, col_reference ='CitySim')
+    peak_cooling_with_citysim = calculate_distance(peak_cooling_with_citysim, col_reference ='CitySim')
     
     
     
@@ -464,7 +464,27 @@ def main(run_citysim=False):
         print("Directory '% s' created" % dir_xlsx)
     else:
         print("Directory '% s' already exists" % dir_xlsx)
+
+
+    #change the current directory
+    os.chdir(dir_xlsx)
     
+    #if there's a new version of citysim, then:
+    if new_ref == True:
+        
+        new_heat = pd.read_excel('heating_with_citysim.xlsx', index_col='CASE')
+        new_heat = add_reference('CitySim', heating_with_citysim, new_heat, 'new_CitySim')
+        new_heat = calculate_distance(new_heat, 'new_CitySim')
+        color_bestest(new_heat, 'new_CitySim','heating_with_citysim', 'distance_%') 
+
+    else:
+        #export a xlsx file with the color of the bestest
+        color_bestest(heating_with_citysim, 'CitySim', 'heating_with_citysim', 'distance_%')
+        color_bestest(cooling_with_citysim, 'CitySim', 'cooling_with_citysim', 'distance_%')
+        color_bestest(peak_heating_with_citysim, 'CitySim', 'peak_heating_with_citysim', 'distance_%')
+        color_bestest(peak_cooling_with_citysim, 'CitySim', 'peak_cooling_with_citysim', 'distance_%')
+    
+
 
     #return to the current dir
     os.chdir(current_dir)

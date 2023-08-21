@@ -9,7 +9,12 @@ import pandas as pd
 import fnmatch
 import subprocess
 import argparse
-
+from varname import nameof
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from matplotlib.colors import LinearSegmentedColormap
+import seaborn as sns
 
 ###############################################################################
 ###                           search_extensions                             ###
@@ -35,7 +40,7 @@ def search_extensions(current_dir, extension_file, create_list=None):
       A list of retrieved file paths.
   """
     #Initialize a list of valid extensions
-    valid_extensions = ['.html', '.csv', '.idf', '.eso', '.xml', 'TH.out', '.xlsx']
+    valid_extensions = ['.html', '.csv', '.idf', '.eso', '.xml', 'TH.out', '.xlsx', '.exe']
 
    
     #this is a while loop to ensure it matches one of the valid extensions
@@ -160,7 +165,8 @@ def integration_with_date_and_hour(h_y):
 ###############################################################################
 
 def add_minmax(df, axis=1):
-    
+    # Get the name of the dataframe
+    #name = nameof(df) non funziona perchè prende il nome df
     #calculates the minumum value across rows and assigns it to a new column named 'min'
     df['min'] = df.min(axis, numeric_only=True)
     
@@ -173,32 +179,33 @@ def add_minmax(df, axis=1):
 ###                           calculate_distance                            ###
 ###############################################################################
 
-def calculate_distance(df, col_reference = '', axis=1):
-
-    #convert the column col_reference from type object to float64
+def calculate_distance(df, col_reference='', axis=1):
+    # Convert the column col_reference from object type to float64
     df[col_reference] = pd.to_numeric(df[col_reference], errors='coerce')
-    
-    #create a new column 'distance_%'
-    df['distance_%'] = 0
-    
+
+    position = df.columns.get_loc(col_reference) + 1
+    df.insert(position, f'dist_%_{col_reference}', 0)
+
     for index, row in df.iterrows():
         value = row[col_reference]
-        
+
         if value < row['min']:
-            # Calculate the distance percentage for the specific row
-            df.at[index, 'distance_%'] = (value - row['min']) / abs(row['min']) * 100
-            
+            # Calculate the distance percentage for values below 'min'
+            df.at[index, f'dist_%_{col_reference}'] = (value - row['min']) / abs(row['min']) * 100
+
         elif value > row['MAX']:
-            # Calculate the distance percentage for the specific row
-            df.at[index, 'distance_%'] = (value - row['MAX']) / abs(row['MAX']) * 100
-            
+            # Calculate the distance percentage for values above 'MAX'
+            df.at[index, f'dist_%_{col_reference}'] = (value - row['MAX']) / abs(row['MAX']) * 100
+
         else:
-            # Set a default value of 0% for the specific row
-            df.at[index, 'distance_%'] = 0
-    
-    #round the values of the column to n decimal places
-    df['distance_%'] = round(df['distance_%'], 1)
-     
+            # Set a default value of 0% if value is within 'min' and 'MAX'
+            df.at[index, f'dist_%_{col_reference}'] = 0
+
+    # Round the values of the 'distance_%' column to one decimal place
+    df[f'dist_%_{col_reference}'] = round(df[f'dist_%_{col_reference}'], 1)
+
+    # Insert the 'distance_%' column to the right of the specified reference column
+
 
     return df
     
@@ -270,82 +277,46 @@ def create_df_HC(path_case):
     return line_results
 
 ###############################################################################
-###                              color_bestest                              ###
+###                            generate_heatmaps                            ###
 ###############################################################################
                                 
-def color_bestest(df, col_reference, out_name= '', *columns):
+def generate_heatmaps(dataframes, folder):
     
-    #get the number position of the columns' names
-    col_nbs = [df.columns.get_loc(col) for col in columns] #columns numbers
-    ref_nb = df.columns.get_loc(col_reference) # reference number
-      
-    # Create a Pandas Excel writer using XlsxWriter as the engine.
-    writer = pd.ExcelWriter(f'{out_name}.xlsx', engine='xlsxwriter')
-      
-    # Convert the dataframe to an XlsxWriter Excel object.
-    df.to_excel(writer, sheet_name='general')
-      
-    # Get the xlsxwriter workbook and worksheet objects.
-    workbook  = writer.book
-    worksheet = writer.sheets['general']
-          
-    # Add a format. Light red fill with dark red text.
-    red_format = workbook.add_format({'bg_color': '#FFC7CE',
-                                      'font_color': '#9C0006'})
-          
-    # Add a format. Light blue fill with dark blue text.
-    blue_format = workbook.add_format({'bg_color': '#0096FF',
-                                      'font_color': '#00008B'})
-      
-    # Add a format. Green fill with black text for =0
-    green_format = workbook.add_format({'bg_color': '#a8e16c',
-                                        'font_color': '#000000'})
-    
-    # Add a format. Grey fill with black text for =0
-    grey_format = workbook.add_format({'bg_color': '#b7b7b7',
-                                        'font_color': '#000000'})
-            
-    for col_nb in col_nbs:
-        # Calculate the range to which the conditional format is applied (only for the desired columns).
-        (min_row, max_row) = (1, df.shape[0])  # Skip header.
-        (min_col, max_col) = (col_nb +1, col_nb +1)  # Only one columns.
-        
-        # Apply a conditional format to the cell range.
-        worksheet.conditional_format(min_row, min_col, max_row, max_col,
-                                       {'type':     'cell',
-                                        'criteria': '<',
-                                        'value':    0,
-                                        'format':   blue_format})
-          
-        worksheet.conditional_format(min_row, min_col, max_row, max_col,
-                                       {'type':     'cell',
-                                        'criteria': '>',
-                                        'value':    0,
-                                        'format':   red_format})
-          
-        worksheet.conditional_format(min_row, min_col, max_row, max_col,
-                                       {'type':     'cell',
-                                        'criteria': '=',
-                                        'value':    0,
-                                        'format':   green_format})
-       
-    #col_reference color
-    (min_row, max_row) = (1, df.shape[0])  # Skip header.
-    (min_col, max_col) = (ref_nb +1, ref_nb +1)  # Only one columns. 
-    
-    worksheet.conditional_format(min_row, min_col, max_row, max_col,
-                                   {'type':     'cell',
-                                    'criteria': '!=',
-                                    'value':    0,
-                                    'format':   grey_format})
-    
-    
-    # Close the Pandas Excel writer and output the Excel file.
-    writer.save()
-    
-    file_name = f'{out_name}.xlsx'
-    
-    return file_name
+    for df_name, df in dataframes.items():
+        # Transpose the data to exchange x and y
+        transposed_df = df.T
+        # Trim the df with only the rows containing the distance %. Function FILTER
+        transposed_df = transposed_df.filter(like='dist_%', axis=0)
+        # Set the size of the heatmap using figsize
+        fig, ax = plt.subplots(figsize=(22, 2))  # Adjust the width and height as needed
+        # Set the labels
+        labels = transposed_df.applymap(lambda v: v if v != 0 else '')
+
+        # Create a custom colormap
+        cmap = sns.light_palette("seagreen", reverse=True, as_cmap=True) 
+        cmap.set_over('tomato')
+        cmap.set_under('tomato')
+
+        # Plot a heatmap with annotation
+        sns.heatmap(transposed_df,  
+                    cmap=cmap,
+                    vmin=0,
+                    vmax=0.001,
+                    annot=labels,
+                    fmt='',
+                    ax=ax,
+                    linewidths=1.5,
+                    square=True,
+                    cbar=False)
+        # Set labels and title
+        ax.set_title(f'Distance Heatmap for {df_name}', weight='bold')
+
+        # Save the heatmap as an image in the specified folder
+        output_filename = os.path.join(folder, f'{df_name}_heatmap.png')
+        plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+
+        # Display the heatmap
+        plt.show()
     
 
 
@@ -354,178 +325,189 @@ def color_bestest(df, col_reference, out_name= '', *columns):
 '                                     Main                                    '
 ###############################################################################
 
-def main(run_citysim=False, new_ref=False, concat_outs=True):
+def main(run_citysim=None):
+
     
+    # Set main folders
+    base_folder = os.getcwd()
+    # Set the CSV outputs folder path
+    csv_outputs = os.path.join(base_folder, 'csv_outputs')
+    images_folder = os.path.join(base_folder, 'Images')
     
-    current_dir = os.getcwd()
-    citysim_path = r"CitySimVersion\CitySim.exe"
+    # Go to the relative path with all CS versions
+    os.chdir("CitySimVersion")
+    # Get a list of ".exe" files
+    CS_list = search_extensions(os.getcwd(), '.exe')
+    # Name the different CitySims
+    CS_names = [('CS_'+os.path.basename(os.path.dirname(path))) for path in CS_list]
+    # Return to main folder
+    os.chdir(base_folder)
     
-    
-    #create a list of all xml files
-    path_XMLfiles = search_extensions(current_dir, extension_file = '.xml')
+       
+    #create a list of all xml file paths
+    path_XMLfiles = search_extensions(base_folder, extension_file = '.xml')
     
     
     'Run CitySim option'
     
-    if run_citysim == True:
-        
-        #run citysim for each file in the list
+    if run_citysim:
+        '''
+        Do a for loop that run citysim and save the results in a csv file. This
+        action is made for every version of CitySim in the folder CitySimVersion
+        '''
         print("Process started")
-        
-        for xmlfile in path_XMLfiles:
-        
-            for path in execute(f"{citysim_path} {xmlfile}"):
-                print(path, end="")
-    
-    
-    #read all TH.out file
-    all_THout = search_extensions(current_dir, extension_file = 'TH.out')
-    
-    
-    'create a df of all the THout for each case'
-    
-    all_results_HC = pd.DataFrame()
-    all_results_HC_peak = pd.DataFrame()
-    
-    for path_case in all_THout:
-        
-        line_results = create_df_HC(path_case)
-        all_results_HC = pd.concat([all_results_HC, line_results], axis=0)
-    
-    for path_case in all_THout:
-        
-        line_results = create_df_HC(path_case)
-        all_results_HC_peak = pd.concat([all_results_HC_peak, line_results], axis=0)
-    
-                       
-    'Heating dataframes: annual / peak hourly'
-    
+        prev_idx = 0  # Variable to store the previous index
+
+        for idx, citysim_path in enumerate(CS_list):
+            CS_version = ('CS_' + os.path.basename(os.path.dirname(citysim_path)))
+
+            if prev_idx == idx:
+                print('Running CitySim for the current version:', CS_version)
+
+                for xmlfile in path_XMLfiles:
+                    os.chdir(base_folder)
+                    print(f'Running {citysim_path} with {xmlfile}')
+
+                    # Run CitySim using the execute function
+                    for path in execute(f"{citysim_path} {xmlfile}"):
+                        print(path, end="")
+
+                print('Collecting results of the current CitySim version')
+                all_THout = search_extensions(base_folder, extension_file='TH.out')
+                annual_HC = pd.DataFrame()
+
+                for path_case in all_THout:
+                    line_results = create_df_HC(path_case)
+                    annual_HC = pd.concat([annual_HC, line_results], axis=0)
+
+                os.chdir(csv_outputs)
+                csv_filename = f'HC_{CS_version}.csv'
+                # Set column 0 as the index and name the index column 'CASE'
+                annual_HC.index.name = 'CASE'
+                annual_HC.to_csv(csv_filename)
+                
+                print(f'Saved results to {csv_filename}')
+
+                print('''
+                      ~~~~~~~~ CHANGING VERSION ~~~~~~~~
+                      ''')
+
+            prev_idx = idx+1
+
+
+
+    os.chdir(base_folder) 
+                 
+    'Heating dataframes: annual / peak hourly'    
     #read data frame of annual heating
-    heating = pd.read_csv ('Archives/archive_annual_heating.csv', index_col = 'CASE')    
+    AH = pd.read_csv ('Archives/archive_annual_heating.csv', index_col = 'CASE')    
     #add the min and max column
-    heating = add_minmax(heating)
+    AH = add_minmax(AH)
     
     #read data frame of hourly peak heating
-    peak_heating = pd.read_csv ('Archives/peak_heating_loads_archive.csv', index_col = 'CASE')
+    APH = pd.read_csv ('Archives/peak_heating_loads_archive.csv', index_col = 'CASE')
     #add min and max column
-    peak_heating = add_minmax(peak_heating)
-    
-    
+    APH = add_minmax(APH)
+       
     'Cooling dataframes: annual / peak hourly'
- 
     #read data frame of cooling
-    cooling = pd.read_csv ('Archives/archive_annual_cooling.csv', index_col = 'CASE')
+    AC = pd.read_csv ('Archives/archive_annual_cooling.csv', index_col = 'CASE')
     # add min and max column
-    cooling = add_minmax(cooling)
+    AC = add_minmax(AC)
     
     #read data frame of hourly peak cooling
-    peak_cooling = pd.read_csv ('Archives/peak_cooling_loads_archive.csv', index_col = 'CASE')
+    APC = pd.read_csv ('Archives/peak_cooling_loads_archive.csv', index_col = 'CASE')
     # add min and max
-    peak_cooling = add_minmax(peak_cooling)
+    APC = add_minmax(APC)
 
+    # Trim dataframes: let only min and max
+    trimmed_AH = AH[['min', 'MAX']]
+    trimmed_AH.index = trimmed_AH.index.astype(str)
+    trimmed_APH = APH[['min', 'MAX']]
+    trimmed_APH.index = trimmed_APH.index.astype(str)
+    trimmed_AC = AC[['min', 'MAX']]
+    trimmed_AC.index = trimmed_AC.index.astype(str)
+    trimmed_APC = APC[['min', 'MAX']]
+    trimmed_APC.index = trimmed_APC.index.astype(str)
     
-
- 
-
     'add citysim reference to the dataframes'
-    
-    heating_with_citysim = add_reference('AH', all_results_HC, heating, 'CitySim')
-    peak_heating_with_citysim = add_reference('APH', all_results_HC_peak, peak_heating, 'CitySim')
-    
-    cooling_with_citysim = add_reference('AC', all_results_HC, cooling, 'CitySim')
-    peak_cooling_with_citysim = add_reference('APC', all_results_HC_peak, peak_cooling, 'CitySim')
-
-    
-    'calculate the distance % from the boundaries (min and MAX)'    
-
-    #calculate the distance
-    heating_with_citysim = calculate_distance(heating_with_citysim, col_reference ='CitySim')
-    cooling_with_citysim = calculate_distance(cooling_with_citysim, col_reference ='CitySim')
-    
-    peak_heating_with_citysim = calculate_distance(peak_heating_with_citysim, col_reference ='CitySim')
-    peak_cooling_with_citysim = calculate_distance(peak_cooling_with_citysim, col_reference ='CitySim')
-    
-    
-    
-    #round all the values
-    heating_with_citysim = round(heating_with_citysim, 3)
-    cooling_with_citysim = round(cooling_with_citysim, 3)
-    
-    peak_heating_with_citysim = round(peak_heating_with_citysim, 3)
-    peak_cooling_with_citysim = round(peak_cooling_with_citysim, 3)
-     
-    
-    'dataframes colored'
-    
-    #create a folder to store the outputs
-    dir_xlsx = 'xlsx_ouputs'
-    if not os.path.exists(dir_xlsx):
-        os.makedirs(dir_xlsx)
-        print("Directory '% s' created" % dir_xlsx)
-    else:
-        print("Directory '% s' already exists" % dir_xlsx)
-
-    #change the current directory
-    os.chdir(dir_xlsx)
-
-    
-    '''
-    If new_ref = True then add the new values found in the simulation into the
-    old excels files. It add 2 new column with citysim and distance.
-    Use new_ref=True if you want to add new values with a new CitySim version
-    and make a comparison.
-    '''
-    if new_ref == True:
+    os.chdir(csv_outputs)
+    for csv in CS_names:
+        # Read the city simulation CSV file into a DataFrame
+        df = pd.read_csv(f'HC_{csv}.csv', index_col='CASE')
+        name = f'{csv}'
         
-        #create a dictionary with the output dataframes
-        df_dict = {
-            "heating_with_citysim.xlsx": heating_with_citysim,
-            "cooling_with_citysim.xlsx": cooling_with_citysim,
-            "peak_heating_with_citysim.xlsx": peak_heating_with_citysim,
-            "peak_cooling_with_citysim.xlsx": peak_cooling_with_citysim,
-            }
-        #find all the xlsx files in the directory
-        excel_paths = search_extensions(os.getcwd(), extension_file='.xlsx') #is a list
-        #extract only the 'names.xlsx'
-        excel_names = [os.path.basename(file_path) for file_path in excel_paths]
+        # Create new column names based on the citysim version
+        new_col_name_AH = f'{name}_(AH)'
+        new_col_name_APH = f'{name}_(APH)'
+        new_col_name_AC = f'{name}_(AC)'
+        new_col_name_APC = f'{name}_(APC)'
         
-        #for each file (string) in the list:
-        for file in excel_names:
-            #read the excel file adn convert it into a df
-            new_df = pd.read_excel(file, index_col='CASE')
-            
-            #check if there's already the new value
-            if 'new_CitySim' in new_df.columns:
-                print(f'new_CitySim column already in the {file}')
-            #if not then:
-            else:
-                #rename column to avoid conflicts
-                new_df.rename(columns={"CitySim": "old_CitySim", "distance_%":"old_distance_%"}, inplace=True)
-                #df_dict.get will get the right value name. With the dict you can
-                #do the for loop in automatic
-                new_df = add_reference('CitySim', df_dict.get(f'{file}'), new_df, 'new_CitySim')
-                new_df = calculate_distance(new_df, 'new_CitySim')
-                #overwrite the xlsx files with the 2 new columns
-                color_bestest(new_df, 'new_CitySim',f'{file}'.strip('.xlsx'), 'distance_%') 
-
-    else:
-        #export a xlsx file with the color of the bestest
-        color_bestest(heating_with_citysim, 'CitySim', 'heating_with_citysim', 'distance_%')
-        color_bestest(cooling_with_citysim, 'CitySim', 'cooling_with_citysim', 'distance_%')
-        color_bestest(peak_heating_with_citysim, 'CitySim', 'peak_heating_with_citysim', 'distance_%')
-        color_bestest(peak_cooling_with_citysim, 'CitySim', 'peak_cooling_with_citysim', 'distance_%')
+        # Add reference columns from the citysim DataFrame to the trimmed DataFrames
+        AH_citysim = retrieve_specific_column(df, 'AH')
+        AH_citysim.rename(columns={'AH': new_col_name_AH}, inplace=True)
+        AH_citysim.index = AH_citysim.index.astype(str)
+        
+        APH_citysim = retrieve_specific_column(df, 'APH')
+        APH_citysim.rename(columns={'APH': new_col_name_APH}, inplace=True)
+        APH_citysim.index = APH_citysim.index.astype(str)
+        
+        AC_citysim = retrieve_specific_column(df, 'AC')
+        AC_citysim.rename(columns={'AC': new_col_name_AC}, inplace=True)
+        AC_citysim.index = AC_citysim.index.astype(str)
+        
+        APC_citysim = retrieve_specific_column(df, 'APC')
+        APC_citysim.rename(columns={'APC': new_col_name_APC}, inplace=True)
+        APC_citysim.index = APC_citysim.index.astype(str)
+         
+        # Join the citysim reference columns with the respective trimmed DataFrames
+        trimmed_AH = trimmed_AH.join(AH_citysim)
+        trimmed_APH = trimmed_APH.join(APH_citysim)
+        trimmed_AC = trimmed_AC.join(AC_citysim)
+        trimmed_APC = trimmed_APC.join(APC_citysim)
+         
+         
+        'calculate the distance % from the boundaries (min and MAX)'    
+        
+        #calculate the distance
+        dist_AH = calculate_distance(trimmed_AH, new_col_name_AH)
+        dist_APH = calculate_distance(trimmed_APH, new_col_name_APH)
+         
+        dist_AC = calculate_distance(trimmed_AC, col_reference = new_col_name_AC)
+        dist_APC = calculate_distance(trimmed_APC, new_col_name_APC)
+         
+    'Save the results'
+       
+    csv_dist_AH = 'dist_AH.csv'
+    dist_AH.to_csv(csv_dist_AH)
+          
+    csv_dist_APH = 'dist_APH.csv'
+    dist_APH.to_csv(csv_dist_APH)
     
+    csv_dist_AC = 'dist_AC.csv'
+    dist_AC.to_csv(csv_dist_AC)
+    
+    csv_dist_APC = 'dist_APC.csv'
+    dist_APC.to_csv(csv_dist_APC)
 
-    if concat_outs:
-        
-        AH_APH = pd.concat([heating_with_citysim, peak_heating_with_citysim], axis=1)
-        AC_APC = pd.concat([cooling_with_citysim, peak_cooling_with_citysim], axis=1)
-        
+
+    ' Heatmaps'   
+    
+    # Usage
+    dataframes = {
+        'dist_AH': dist_AH,
+        'dist_APH': dist_APH,
+        'dist_AC': dist_AC,
+        'dist_APC': dist_APC,
+    }
+    
+    generate_heatmaps(dataframes, images_folder)
+
 
     #return to the current dir
-    os.chdir(current_dir)
+    os.chdir(base_folder)
 
-    return heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim,AH_APH, AC_APC
+    return dist_AH,dist_APH, dist_AC, dist_APC
  
 
 
@@ -543,9 +525,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Call the main function with the parsed arguments
-    main(args.run_citysim)
+    #main(args.run_citysim)
     
-    heating_with_citysim, cooling_with_citysim, peak_heating_with_citysim, peak_cooling_with_citysim, AH_APH, AC_APC = main()
+    dist_AH,dist_APH, dist_AC, dist_APC = main()
 
 
 

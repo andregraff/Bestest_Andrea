@@ -2,9 +2,9 @@
 
 # Project Description
 
-This is an updated and improved work from the thesis work of the EPFL student Walter Emmanuel (github: https://github.com/ibpsa/project1-destest , 
+This is an updated and improved work from the thesis work of the EPFL student Walter Emmanuel (EPFL: https://infoscience.epfl.ch/record/214754 , 
                                                                                                zenodo: https://zenodo.org/record/3463414).
-This repo contains all the necessary files used to accomplish the bestest benchmark with the latest version of CitySim tool (https://www.epfl.ch/labs/leso/transfer/software/citysim/).
+This repo contains all the necessary files used to accomplish the BESTEST benchmark with the latest version of CitySim tool (https://www.epfl.ch/labs/leso/transfer/software/citysim/).
 
 
 # Contents

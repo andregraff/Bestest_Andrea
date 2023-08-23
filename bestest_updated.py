@@ -9,12 +9,14 @@ import pandas as pd
 import fnmatch
 import subprocess
 import argparse
-from varname import nameof
+#from varname import nameof
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-from matplotlib.colors import LinearSegmentedColormap
+#from matplotlib.colors import ListedColormap
+#from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
+import sys
+from PIL import Image
 
 ###############################################################################
 ###                           search_extensions                             ###
@@ -502,6 +504,40 @@ def main(run_citysim=None):
     }
     
     generate_heatmaps(dataframes, images_folder)
+    
+    ' Mount the images vertically'
+    os.chdir(images_folder)
+    
+    # Initialize a list to store heatmap images
+    heatmap_images = []
+    
+    # Iterate through the keys in the dataframes dictionary
+    for key in dataframes.keys():
+        # Construct the filename for the heatmap image based on the key
+        heatmap_filename = f"{key}_heatmap.png"
+        
+        # Open the heatmap image and append it to the list
+        heatmap_image = Image.open(heatmap_filename)
+        heatmap_images.append(heatmap_image)
+    
+    # Get the maximum width and total height
+    max_width = max(i.size[0] for i in heatmap_images)
+    total_height = sum(i.size[1] for i in heatmap_images)
+    
+    # Create a new blank image with the maximum width and total height
+    new_im = Image.new('RGB', (max_width, total_height))
+    
+    y_offset = 0  # Initialize the y_offset
+    
+    # Paste each image vertically
+    for im in heatmap_images:
+        new_im.paste(im, (0, y_offset))
+        y_offset += im.size[1]  # Update the y_offset for the next image
+    
+    # Save the resulting vertical montage
+    new_im.save('vertical_montage.jpg')
+
+
 
 
     #return to the current dir

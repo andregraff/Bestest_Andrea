@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import sys
 from PIL import Image
+import cv2
 
 ###############################################################################
 ###                           search_extensions                             ###
@@ -68,7 +69,7 @@ def search_extensions(current_dir, extension_file, create_list=None):
         
     #print the total number of files found   
     count_files = len(files_found) 
-    print(f"-->Total files found: {count_files}")
+    print(f"-->Total [{extension_file}] files found: {count_files}")
     
     if create_list:
         file_path = os.path.join(current_dir, f"{extension_file}.txt")
@@ -311,7 +312,7 @@ def generate_heatmaps(dataframes, folder):
                     square=True,
                     cbar=False)
         # Set labels and title
-        ax.set_title(f'Distance Heatmap for {df_name}', weight='bold')
+        ax.set_title(f'Heatmap for {df_name}', weight='bold')
 
         # Save the heatmap as an image in the specified folder
         output_filename = os.path.join(folder, f'{df_name}_heatmap.png')
@@ -320,14 +321,37 @@ def generate_heatmaps(dataframes, folder):
         # Display the heatmap
         plt.show()
     
+###############################################################################
+###                              vconcat_resize                             ###
+###############################################################################
 
+# define a function for vertically 
+# concatenating images of different
+# widths 
+def vconcat_resize(img_list, interpolation = cv2.INTER_CUBIC):
+    '''
+    Concatenate images of different widths vertically: It is used to 
+    combine images of different widths. here shape[0] represents height 
+    and shape[1] represents width
 
+    '''
+    # take minimum width
+    w_min = min(img.shape[1] 
+                for img in img_list)
+      
+    # resizing images
+    im_list_resize = [cv2.resize(img,
+                      (w_min, int(img.shape[0] * w_min / img.shape[1])),
+                                 interpolation = interpolation)
+                      for img in img_list]
+    # return final image
+    return cv2.vconcat(im_list_resize)
 
 ###############################################################################
 '                                     Main                                    '
 ###############################################################################
 
-def main(run_citysim=None):
+def main(run_citysim=False):
 
     
     # Set main folders
@@ -337,7 +361,7 @@ def main(run_citysim=None):
     images_folder = os.path.join(base_folder, 'Images')
     
     # Go to the relative path with all CS versions
-    os.chdir("CitySimVersion")
+    os.chdir("CitySimVersions")
     # Get a list of ".exe" files
     CS_list = search_extensions(os.getcwd(), '.exe')
     # Name the different CitySims
@@ -355,7 +379,7 @@ def main(run_citysim=None):
     if run_citysim:
         '''
         Do a for loop that run citysim and save the results in a csv file. This
-        action is made for every version of CitySim in the folder CitySimVersion
+        action is made for every version of CitySim in the folder CitySimVersions
         '''
         print("Process started")
         prev_idx = 0  # Variable to store the previous index
@@ -493,8 +517,8 @@ def main(run_citysim=None):
     dist_APC.to_csv(csv_dist_APC)
 
 
-    ' Heatmaps'   
-    
+    ' Generate Heatmaps'   
+    os.chdir(images_folder)    
     # Usage
     dataframes = {
         'dist_AH': dist_AH,
@@ -505,43 +529,32 @@ def main(run_citysim=None):
     
     generate_heatmaps(dataframes, images_folder)
     
+    
     ' Mount the images vertically'
-    os.chdir(images_folder)
     
-    # Initialize a list to store heatmap images
-    heatmap_images = []
+
     
+    heatmap_filenames = []   
     # Iterate through the keys in the dataframes dictionary
     for key in dataframes.keys():
         # Construct the filename for the heatmap image based on the key
         heatmap_filename = f"{key}_heatmap.png"
+        heatmap_filenames.append(heatmap_filename)
         
-        # Open the heatmap image and append it to the list
-        heatmap_image = Image.open(heatmap_filename)
-        heatmap_images.append(heatmap_image)
-    
-    # Get the maximum width and total height
-    max_width = max(i.size[0] for i in heatmap_images)
-    total_height = sum(i.size[1] for i in heatmap_images)
-    
-    # Create a new blank image with the maximum width and total height
-    new_im = Image.new('RGB', (max_width, total_height))
-    
-    y_offset = 0  # Initialize the y_offset
-    
-    # Paste each image vertically
-    for im in heatmap_images:
-        new_im.paste(im, (0, y_offset))
-        y_offset += im.size[1]  # Update the y_offset for the next image
-    
-    # Save the resulting vertical montage
-    new_im.save('vertical_montage.jpg')
+
+    # Create a list of Numpy array 
+    img_list = []
+    for img in heatmap_filenames:
+        imread = cv2.imread(img)
+        img_list.append(imread)
+        
+    # function calling      
+    img_v_resize = vconcat_resize(img_list)     
+
+    # show the output image
+    cv2.imwrite('vconcat_resize.png', img_v_resize)
 
 
-
-
-    #return to the current dir
-    os.chdir(base_folder)
 
     return dist_AH,dist_APH, dist_AC, dist_APC
  

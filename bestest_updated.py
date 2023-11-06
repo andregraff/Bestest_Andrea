@@ -9,14 +9,9 @@ import pandas as pd
 import fnmatch
 import subprocess
 import argparse
-#from varname import nameof
 import numpy as np
 import matplotlib.pyplot as plt
-#from matplotlib.colors import ListedColormap
-#from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
-import sys
-from PIL import Image
 import cv2
 
 ###############################################################################
@@ -286,20 +281,52 @@ def create_df_HC(path_case):
 def generate_heatmaps(dataframes, folder):
     
     for df_name, df in dataframes.items():
+        
         # Transpose the data to exchange x and y
         transposed_df = df.T
         # Trim the df with only the rows containing the distance %. Function FILTER
         transposed_df = transposed_df.filter(like='dist_%', axis=0)
-        # Set the size of the heatmap using figsize
-        fig, ax = plt.subplots(figsize=(22, 2))  # Adjust the width and height as needed
-        # Set the labels
-        labels = transposed_df.applymap(lambda v: v if v != 0 else '')
-
+        
+        transposed_df2 = df.T  # Transpose the DataFrame 'df'
+        transposed_df2 = transposed_df2.filter(like="CS", axis=0)  # Keep only rows containing 'CS' in their index
+        transposed_df2 = transposed_df2[~transposed_df2.index.str.contains('dist_%')]  # Remove rows containing 'dist_%' in their index
+        transposed_df2 = transposed_df2.round(2)
+        
+        # Creazione di un nuovo DataFrame con sostituzione di 0 con False e non-0 con True
+        df_indicator = transposed_df != 0
+        
+        # Replacing values in transposed_df2
+        for col in df_indicator.columns[1:]:
+            transposed_df2.loc[df_indicator[col].values, col] = 0
+     
         # Create a custom colormap
         cmap = sns.light_palette("seagreen", reverse=True, as_cmap=True) 
         cmap.set_over('tomato')
         cmap.set_under('tomato')
+        
+        # Set the size of the heatmap using figsize
+        fig, ax = plt.subplots(figsize=(22, 2))  # Adjust the width and height as needed
 
+        'first heatmap' 
+        # Set the labels
+        labels = transposed_df2.applymap(lambda v: v if v != 0 else '')
+        # Plot a heatmap with annotation
+        sns.heatmap(transposed_df2,  
+                    cmap=cmap,
+                    vmin=0,
+                    vmax=0.001,
+                    annot= labels,
+                    fmt= '',
+                    ax=ax,
+                    linewidths=1.5,
+                    square=True,
+                    cbar=False)
+             
+        'second heatmap'
+         
+        # Set the labels
+        labels = transposed_df.applymap(lambda v: v if v != 0 else '')
+        
         # Plot a heatmap with annotation
         sns.heatmap(transposed_df,  
                     cmap=cmap,
